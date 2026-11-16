@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Acesso</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:#fff;}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#0f172a;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .box{width:100%;max-width:340px;}
+  h1{font-size:22px;font-weight:800;letter-spacing:-.4px;margin-bottom:4px;}
+  p.s{font-size:13.5px;color:#64748b;margin-bottom:22px;}
+  label{display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:6px;}
+  input[type=password],input[type=text]{width:100%;padding:12px 14px;font-size:16px;letter-spacing:2px;text-transform:uppercase;border:1px solid #cbd5e1;border-radius:10px;outline:none;font-family:ui-monospace,Menlo,monospace;}
+  input:focus{border-color:#2457C5;box-shadow:0 0 0 3px rgba(36,87,197,.15);}
+  button{width:100%;margin-top:12px;padding:12px;font-size:15px;font-weight:700;color:#fff;background:#2457C5;border:none;border-radius:10px;cursor:pointer;}
+  button:disabled{opacity:.6;cursor:default;}
+  .err{display:none;margin-top:12px;font-size:13px;color:#b91c1c;}
+  .up{display:none;margin-top:18px;padding:14px;border:1px dashed #94a3b8;border-radius:10px;font-size:13px;color:#334155;line-height:1.5;}
+  .up input{margin-top:10px;font-size:13px;}
+  .ld{display:none;margin-top:14px;font-size:13px;color:#64748b;}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Acesso</h1>
+  <p class="s">Introduza o seu código de acesso</p>
+  <form id="f" autocomplete="off">
+    <label for="c">Código de acesso</label>
+    <input id="c" type="password" autocapitalize="characters" spellcheck="false" autofocus>
+    <button id="b" type="submit">Entrar</button>
+  </form>
+  <div class="ld" id="ld">A abrir…</div>
+  <div class="err" id="e"></div>
+  <div class="up" id="up">
+    <b id="upt">A aplicação ainda não está publicada.</b><br>
+    Como administrador, escolha o ficheiro da aplicação para a publicar:
+    <input type="file" id="fx" accept=".html,text/html">
+  </div>
+</div>
+<script>
+(function () {
+  var URL_ = 'https://mmhmiuxfhwwalwnegrlg.supabase.co', KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1taG1pdXhmaHd3YWx3bmVncmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NjI3MTEsImV4cCI6MjA5ODIzODcxMX0.4_AdbI8K-fWXaIB0VOmV2Ld8Kh-pzVU9PypeoGUJdAU';
+  var f = document.getElementById('f'), c = document.getElementById('c'), b = document.getElementById('b');
+  var e = document.getElementById('e'), ld = document.getElementById('ld'), up = document.getElementById('up');
+
+  function rpc(nome, corpo) {
+    return fetch(URL_ + '/rest/v1/rpc/' + nome, {
+      method: 'POST', mode: 'cors', credentials: 'omit',
+      headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo)
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw j; return j; }); });
+  }
+  // só aceita o ficheiro completo da aplicação (não a página de entrada)
+  function versaoApp(html) {
+    if (!html || html.length < 200000 || html.indexOf('id="login-wrap"') < 0) return null;
+    var v = /<meta name="gestdds-versao" content="(\d{4}-\d\d-\d\d \d\d:\d\d)"/.exec(html);
+    return v ? v[1] : null;
+  }
+  function pedirFicheiro(t) {
+    ld.style.display = 'none'; b.disabled = false; up.style.display = 'block';
+    if (t) document.getElementById('upt').innerHTML = t;
+  }
+  function erro(t) { e.textContent = t; e.style.display = 'block'; ld.style.display = 'none'; b.disabled = false; }
+
+  function abrir(codigo, html) {
+    try { sessionStorage.setItem('acesso-auto', codigo); } catch (x) {}
+    document.open(); document.write(html); document.close();
+  }
+
+  f.onsubmit = function (ev) {
+    ev.preventDefault();
+    var codigo = c.value.trim().toUpperCase();
+    if (!codigo) { erro('Introduza o seu código.'); return; }
+    e.style.display = 'none'; up.style.display = 'none'; ld.style.display = 'block'; b.disabled = true;
+    rpc('gestdds_app', { p_codigo: codigo }).then(function (r) {
+      if (r && r.ok && r.html) {
+        if (versaoApp(r.html)) return abrir(codigo, r.html);
+        return pedirFicheiro('A versão publicada não está correta. Volte a publicar.');   // só um administrador consegue
+      }
+      var m = r && r.motivo;
+      if (m === 'sem_app' && r.admin) { pedirFicheiro(); return; }
+      erro(m === 'inativo' ? 'Esta conta está inativa.' : m === 'sem_acesso' ? 'Este código não tem acesso à aplicação.' :
+           m === 'sem_app' ? 'A aplicação está a ser atualizada. Tente daqui a pouco.' : 'Código inválido. Tente novamente.');
+    }).catch(function () { erro('Não foi possível ligar ao servidor. Tente novamente.'); });
+  };
+
+  document.getElementById('fx').onchange = function () {
+    var fl = this.files && this.files[0];
+    if (!fl) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      var html = String(rd.result || '');
+      var v = versaoApp(html);
+      if (!v) { erro('Este ficheiro não é o da aplicação (é o maior dos dois, com cerca de 750 KB).'); document.getElementById('fx').value = ''; return; }
+      var codigo = c.value.trim().toUpperCase();
+      ld.textContent = 'A publicar…'; ld.style.display = 'block';
+      rpc('gestdds_publicar', { p_codigo: codigo, p_html: html, p_versao: v }).then(function (r) {
+        if (!r || !r.ok) { erro('Não foi possível publicar (só um administrador pode).'); return; }
+        abrir(codigo, html);
+      }).catch(function () { erro('Não foi possível publicar. Tente novamente.'); });
+    };
+    rd.readAsText(fl, 'utf-8');
+  };
+})();
+</script>
+</body>
+</html>
